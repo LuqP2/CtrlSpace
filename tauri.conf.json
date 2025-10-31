@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/@tauri-apps/cli/schema.json",
+  "productName": "CtrlSpace",
+  "version": "0.1.0",
+  "identifier": "com.ctrlspace.app",
+  "build": {
+    "beforeBuildCommand": "cd src/frontend && npm run build",
+    "beforeDevCommand": "cd src/frontend && npm run dev",
+    "devPath": "http://localhost:1420",
+    "distDir": "src/frontend/dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterBundle": false,
+    "category": "Utility",
+    "shortDescription": "",
+    "longDescription": "",
+    "copyright": "",
+    "deb": {
+      "depends": []
+    },
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": ""
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
+  },
+  "plugins": {}
+}
