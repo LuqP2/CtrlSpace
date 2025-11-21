@@ -32,7 +32,7 @@ impl SteamControllerManager {
 
     /// Detect if a Steam Controller is connected
     pub fn detect(&self) -> Option<SteamControllerInfo> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
 
         // Refresh device list
         if let Err(e) = api.refresh_devices() {
