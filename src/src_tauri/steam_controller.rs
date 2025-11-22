@@ -217,22 +217,21 @@ impl SteamControllerManager {
         Arc::clone(&self.device)
     }
 
-    /// Read input from the controller (non-blocking)
+    /// Read input from the controller (non-blocking with short timeout for real-time polling)
     pub fn read_input(&self) -> Result<Vec<u8>, String> {
         let device_lock = self.device.lock().unwrap();
 
         match device_lock.as_ref() {
             Some(device) => {
                 let mut buf = vec![0u8; 64];
-                // Increased timeout to 1000ms (1 second) to give controller time to send data
-                match device.read_timeout(&mut buf, 1000) {
+                // Short timeout (50ms) to enable real-time polling without blocking
+                match device.read_timeout(&mut buf, 50) {
                     Ok(size) => {
                         if size > 0 {
-                            println!("📥 Received {} bytes from controller", size);
                             buf.truncate(size);
                             Ok(buf)
                         } else {
-                            Err("No data available (timeout after 1s)".to_string())
+                            Err("No data available".to_string())
                         }
                     }
                     Err(e) => Err(format!("Read error: {}", e)),

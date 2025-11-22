@@ -101,7 +101,7 @@ function App() {
       }
     };
 
-    const interval = setInterval(pollInput, 16); // ~60Hz
+    const interval = setInterval(pollInput, 100); // 10Hz (100ms) - safe for 50ms backend timeout
     return () => clearInterval(interval);
   }, [isConnected, isPolling]);
 
@@ -120,7 +120,7 @@ function App() {
       const info = await invoke<SteamControllerInfo>('connect_steam_controller');
       setControllerInfo(info);
       setIsConnected(true);
-      setIsPolling(false); // Disabled auto-polling to prevent crash with 1000ms timeout
+      setIsPolling(true); // Re-enabled auto-polling with reduced timeout (50ms backend)
       setError('');
     } catch (e) {
       setError(String(e));
