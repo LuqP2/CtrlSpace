@@ -101,7 +101,7 @@ function App() {
       }
     };
 
-    const interval = setInterval(pollInput, 100); // 10Hz (100ms) - safe for 50ms backend timeout
+    const interval = setInterval(pollInput, 30); // ~33Hz for minimal latency
     return () => clearInterval(interval);
   }, [isConnected, isPolling]);
 
