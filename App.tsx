@@ -142,9 +142,12 @@ function App() {
   const testRawInput = async () => {
     try {
       const rawData = await invoke<string>('read_raw_input_debug');
-      alert('Raw Input Data:\n' + rawData);
+      console.log('✅ Raw Input Data:');
+      console.log(rawData);
+      setError('Raw data logged to console (F12)');
     } catch (e) {
-      alert('Error reading raw input:\n' + String(e));
+      console.error('❌ Error reading raw input:', e);
+      setError(String(e));
     }
   };
 
