@@ -151,6 +151,18 @@ function App() {
     }
   };
 
+  const listInterfaces = async () => {
+    try {
+      const interfaces = await invoke<any[]>('list_steam_controller_interfaces');
+      console.log('🔍 Steam Controller HID Interfaces:');
+      console.table(interfaces);
+      setError(`Found ${interfaces.length} interfaces - check console (F12)`);
+    } catch (e) {
+      console.error('❌ Error listing interfaces:', e);
+      setError(String(e));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-6xl mx-auto">
@@ -208,6 +220,12 @@ function App() {
               }`}
             >
               🐛 Debug Raw Input
+            </button>
+            <button
+              onClick={listInterfaces}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded transition"
+            >
+              🔍 List HID Interfaces
             </button>
           </div>
 

@@ -20,6 +20,16 @@ pub fn greet(name: &str) -> String {
     format!("Hello, {}!", name)
 }
 
+#[derive(Serialize)]
+pub struct DetailedDeviceInfo {
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub product: String,
+    pub interface_number: i32,
+    pub usage_page: u16,
+    pub usage: u16,
+}
+
 #[tauri::command]
 pub fn list_devices() -> Vec<DeviceInfo> {
     let mut out = vec![];
@@ -30,6 +40,26 @@ pub fn list_devices() -> Vec<DeviceInfo> {
                 product_id: d.product_id(),
                 product: d.product_string().unwrap_or("Unknown").to_string(),
             });
+        }
+    }
+    out
+}
+
+#[tauri::command]
+pub fn list_steam_controller_interfaces() -> Vec<DetailedDeviceInfo> {
+    let mut out = vec![];
+    if let Ok(api) = hidapi::HidApi::new() {
+        for d in api.device_list() {
+            if d.vendor_id() == 0x28de {  // Valve
+                out.push(DetailedDeviceInfo {
+                    vendor_id: d.vendor_id(),
+                    product_id: d.product_id(),
+                    product: d.product_string().unwrap_or("Unknown").to_string(),
+                    interface_number: d.interface_number(),
+                    usage_page: d.usage_page(),
+                    usage: d.usage(),
+                });
+            }
         }
     }
     out
