@@ -32,7 +32,7 @@ impl SteamControllerManager {
 
     /// Detect if a Steam Controller is connected
     pub fn detect(&self) -> Option<SteamControllerInfo> {
-        let api = self.api.lock().unwrap();
+        let mut api = self.api.lock().unwrap();
 
         // Refresh device list
         if let Err(e) = api.refresh_devices() {
@@ -71,14 +71,30 @@ impl SteamControllerManager {
     pub fn connect(&self) -> Result<SteamControllerInfo, String> {
         let api = self.api.lock().unwrap();
 
-        // Try to find and open the device
+        // Try to find and open the VENDOR-SPECIFIC interface (not mouse/keyboard)
+        // We need usage_page=0xFF00 (65280) which is the raw controller interface
         for device_info in api.device_list() {
             if device_info.vendor_id() == VALVE_VENDOR_ID {
                 let pid = device_info.product_id();
                 if pid == SC_WIRELESS_PID || pid == SC_WIRED_PID {
+                    // Only open vendor-specific interface (usage_page=65280)
+                    // This is NOT the mouse (usage_page=1, usage=2) or keyboard interface
+                    if device_info.usage_page() != 0xFF00 {
+                        println!("⏭️ Skipping interface {} (usage_page={}, usage={}) - not vendor-specific",
+                            device_info.interface_number(),
+                            device_info.usage_page(),
+                            device_info.usage());
+                        continue;
+                    }
+
+                    println!("✅ Opening vendor-specific interface {} (usage_page=0x{:04x}, usage={})",
+                        device_info.interface_number(),
+                        device_info.usage_page(),
+                        device_info.usage());
+
                     let device = api
-                        .open(VALVE_VENDOR_ID, pid)
-                        .map_err(|e| format!("Failed to open device: {}", e))?;
+                        .open_path(device_info.path())
+                        .map_err(|e| format!("Failed to open device path: {}", e))?;
 
                     let connection_type = if pid == SC_WIRELESS_PID {
                         "Wireless"
@@ -102,6 +118,13 @@ impl SteamControllerManager {
                     // Store the device
                     let mut device_lock = self.device.lock().unwrap();
                     *device_lock = Some(device);
+                    drop(device_lock); // Release lock
+
+                    // NOTE: NOT disabling Lizard Mode for now - trying to read data
+                    // while mouse emulation is still active. Many Steam Controller
+                    // projects do this successfully.
+                    println!("📡 Connected to vendor-specific interface - ready to read raw data");
+                    println!("   (Lizard Mode still active - mouse will continue working)");
 
                     return Ok(info);
                 }
@@ -111,6 +134,49 @@ impl SteamControllerManager {
         Err("Steam Controller not found".to_string())
     }
 
+    /// Disable Lizard Mode (mouse/keyboard emulation)
+    /// This allows us to read raw HID input data
+    fn disable_lizard_mode(&self) -> Result<(), String> {
+        let device_lock = self.device.lock().unwrap();
+
+        if let Some(device) = device_lock.as_ref() {
+            // Command 1: Disable mouse emulation
+            // Feature report 0x81 - turns off the default mouse behavior
+            let disable_mouse = vec![0x81, 0x00];
+
+            device.send_feature_report(&disable_mouse)
+                .map_err(|e| format!("Failed to disable mouse mode: {}", e))?;
+
+            println!("  ✓ Mouse emulation disabled");
+
+            // Small delay
+            std::thread::sleep(std::time::Duration::from_millis(20));
+
+            // Command 2: Enable full input mode
+            // Feature report 0x87 - configures the controller for raw input
+            let enable_input = vec![
+                0x87, 0x15, 0x32, 0x84, 0x03, 0x18, 0x00, 0x00,
+                0x31, 0x02, 0x00, 0x08, 0x07, 0x00, 0x07, 0x07,
+                0x00, 0x30, 0x18, 0x00, 0x2f, 0x01, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ];
+
+            device.send_feature_report(&enable_input)
+                .map_err(|e| format!("Failed to enable input mode: {}", e))?;
+
+            println!("  ✓ Raw input mode enabled");
+            println!("✅ Lizard Mode disabled - controller ready for raw input!");
+
+            Ok(())
+        } else {
+            Err("Controller not connected".to_string())
+        }
+    }
+
     /// Check if currently connected
     pub fn is_connected(&self) -> bool {
         self.device.lock().unwrap().is_some()
@@ -118,8 +184,32 @@ impl SteamControllerManager {
 
     /// Disconnect from the device
     pub fn disconnect(&self) {
+        // Re-enable Lizard Mode before disconnecting
+        println!("🦎 Re-enabling Lizard Mode...");
+        let _ = self.enable_lizard_mode();
+
         let mut device_lock = self.device.lock().unwrap();
         *device_lock = None;
+        println!("✅ Controller disconnected");
+    }
+
+    /// Re-enable Lizard Mode (mouse/keyboard emulation)
+    /// This restores default controller behavior
+    fn enable_lizard_mode(&self) -> Result<(), String> {
+        let device_lock = self.device.lock().unwrap();
+
+        if let Some(device) = device_lock.as_ref() {
+            // Enable mouse emulation
+            let enable_mouse = vec![0x81, 0x01];
+
+            device.send_feature_report(&enable_mouse)
+                .map_err(|e| format!("Failed to enable mouse mode: {}", e))?;
+
+            println!("  ✓ Mouse emulation re-enabled");
+            Ok(())
+        } else {
+            Err("Controller not connected".to_string())
+        }
     }
 
     /// Get the HID device for reading/writing
@@ -127,15 +217,15 @@ impl SteamControllerManager {
         Arc::clone(&self.device)
     }
 
-    /// Read input from the controller (non-blocking)
+    /// Read input from the controller (non-blocking with minimal timeout for real-time polling)
     pub fn read_input(&self) -> Result<Vec<u8>, String> {
         let device_lock = self.device.lock().unwrap();
 
         match device_lock.as_ref() {
             Some(device) => {
                 let mut buf = vec![0u8; 64];
+                // Very short timeout (10ms) for minimal latency
                 match device.read_timeout(&mut buf, 10) {
-                    // 10ms timeout
                     Ok(size) => {
                         if size > 0 {
                             buf.truncate(size);

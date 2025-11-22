@@ -1,34 +1,46 @@
 {
   "$schema": "./node_modules/@tauri-apps/cli/schema.json",
-  "productName": "CtrlSpace",
-  "version": "0.1.0",
-  "identifier": "com.ctrlspace.app",
   "build": {
-    "beforeBuildCommand": "cd src/frontend && npm run build",
-    "beforeDevCommand": "cd src/frontend && npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
     "devPath": "http://localhost:1420",
-    "distDir": "src/frontend/dist"
+    "distDir": "../dist"
   },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "createUpdaterBundle": false,
-    "category": "Utility",
-    "shortDescription": "",
-    "longDescription": "",
-    "copyright": "",
-    "deb": {
-      "depends": []
-    },
-    "macOS": {
-      "frameworks": [],
-      "minimumSystemVersion": ""
-    },
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
-    }
+  "package": {
+    "productName": "CtrlSpace",
+    "version": "0.1.0"
   },
-  "plugins": {}
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "dialog": {
+        "all": false,
+        "message": true,
+        "ask": true
+      },
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.ctrlspace.app"
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "CtrlSpace - Steam Controller Manager",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
+  }
 }

@@ -20,6 +20,16 @@ pub fn greet(name: &str) -> String {
     format!("Hello, {}!", name)
 }
 
+#[derive(Serialize)]
+pub struct DetailedDeviceInfo {
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub product: String,
+    pub interface_number: i32,
+    pub usage_page: u16,
+    pub usage: u16,
+}
+
 #[tauri::command]
 pub fn list_devices() -> Vec<DeviceInfo> {
     let mut out = vec![];
@@ -30,6 +40,26 @@ pub fn list_devices() -> Vec<DeviceInfo> {
                 product_id: d.product_id(),
                 product: d.product_string().unwrap_or("Unknown").to_string(),
             });
+        }
+    }
+    out
+}
+
+#[tauri::command]
+pub fn list_steam_controller_interfaces() -> Vec<DetailedDeviceInfo> {
+    let mut out = vec![];
+    if let Ok(api) = hidapi::HidApi::new() {
+        for d in api.device_list() {
+            if d.vendor_id() == 0x28de {  // Valve
+                out.push(DetailedDeviceInfo {
+                    vendor_id: d.vendor_id(),
+                    product_id: d.product_id(),
+                    product: d.product_string().unwrap_or("Unknown").to_string(),
+                    interface_number: d.interface_number(),
+                    usage_page: d.usage_page(),
+                    usage: d.usage(),
+                });
+            }
         }
     }
     out
@@ -100,6 +130,25 @@ pub fn read_controller_input() -> Result<ControllerInput, String> {
         Some(m) => {
             let raw_data = m.read_input()?;
             parse_input_report(&raw_data)
+        }
+        None => Err("Steam Controller manager not initialized".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn read_raw_input_debug() -> Result<String, String> {
+    let manager = SC_MANAGER.lock().unwrap();
+
+    match manager.as_ref() {
+        Some(m) => {
+            match m.read_input() {
+                Ok(data) => {
+                    // Convert to hex string for debugging
+                    let hex: Vec<String> = data.iter().map(|b| format!("{:02x}", b)).collect();
+                    Ok(format!("Size: {} bytes\nHex: {}", data.len(), hex.join(" ")))
+                }
+                Err(e) => Err(e),
+            }
         }
         None => Err("Steam Controller manager not initialized".to_string()),
     }

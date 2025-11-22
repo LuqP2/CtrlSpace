@@ -101,7 +101,7 @@ function App() {
       }
     };
 
-    const interval = setInterval(pollInput, 16); // ~60Hz
+    const interval = setInterval(pollInput, 30); // ~33Hz for minimal latency
     return () => clearInterval(interval);
   }, [isConnected, isPolling]);
 
@@ -120,7 +120,7 @@ function App() {
       const info = await invoke<SteamControllerInfo>('connect_steam_controller');
       setControllerInfo(info);
       setIsConnected(true);
-      setIsPolling(true);
+      setIsPolling(true); // Re-enabled auto-polling with reduced timeout (50ms backend)
       setError('');
     } catch (e) {
       setError(String(e));
@@ -135,6 +135,30 @@ function App() {
       setInput(null);
       setError('');
     } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const testRawInput = async () => {
+    try {
+      const rawData = await invoke<string>('read_raw_input_debug');
+      console.log('✅ Raw Input Data:');
+      console.log(rawData);
+      setError('Raw data logged to console (F12)');
+    } catch (e) {
+      console.error('❌ Error reading raw input:', e);
+      setError(String(e));
+    }
+  };
+
+  const listInterfaces = async () => {
+    try {
+      const interfaces = await invoke<any[]>('list_steam_controller_interfaces');
+      console.log('🔍 Steam Controller HID Interfaces:');
+      console.table(interfaces);
+      setError(`Found ${interfaces.length} interfaces - check console (F12)`);
+    } catch (e) {
+      console.error('❌ Error listing interfaces:', e);
       setError(String(e));
     }
   };
@@ -185,6 +209,23 @@ function App() {
               }`}
             >
               Disconnect
+            </button>
+            <button
+              onClick={testRawInput}
+              disabled={!isConnected}
+              className={`px-4 py-2 rounded transition ${
+                !isConnected
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : 'bg-yellow-600 hover:bg-yellow-700'
+              }`}
+            >
+              🐛 Debug Raw Input
+            </button>
+            <button
+              onClick={listInterfaces}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded transition"
+            >
+              🔍 List HID Interfaces
             </button>
           </div>
 

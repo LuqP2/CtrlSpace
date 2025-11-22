@@ -192,16 +192,18 @@ impl fmt::Display for ControllerInput {
 
 /// Parse HID report from Steam Controller
 ///
-/// The Steam Controller sends 64-byte HID reports with the following structure:
-/// - Bytes 0-1: Report type
-/// - Bytes 2-9: Button states (bit flags)
-/// - Bytes 10-11: Left trigger analog value
-/// - Bytes 12-13: Right trigger analog value
-/// - Bytes 14-17: Left trackpad X, Y coordinates
-/// - Bytes 18-21: Right trackpad X, Y coordinates
-/// - Bytes 22-25: Stick X, Y coordinates
-/// - Bytes 26-31: Gyroscope data (pitch, yaw, roll)
-/// - Remaining: Timestamp and other data
+/// Empirically determined format based on actual USB wired controller data:
+/// - Byte 0: Report ID (0x01)
+/// - Byte 1: Sequence number
+/// - Bytes 2-3: Button/state flags
+/// - Bytes 4-7: Timestamp (32-bit LE)
+/// - Byte 8: Trigger press flags (0x01=RT, 0x02=LT)
+/// - Byte 10: Trackpad flags (0x08=L touch, 0x10=R touch, 0x04=click)
+/// - Byte 12: Right trigger analog (0-255)
+/// - Byte 13: Left trigger analog (0-255)
+/// - Bytes 16-19: Left trackpad X,Y (16-bit LE) OR Stick X,Y when trackpad not touched
+/// - Bytes 20-23: Right trackpad X,Y (16-bit LE)
+/// - Bytes 48+: Gyroscope/Accelerometer data
 pub fn parse_input_report(data: &[u8]) -> Result<ControllerInput, String> {
     if data.len() < 64 {
         return Err(format!("Invalid report size: {} bytes", data.len()));
@@ -214,65 +216,67 @@ pub fn parse_input_report(data: &[u8]) -> Result<ControllerInput, String> {
 
     let mut input = ControllerInput::default();
 
-    // Parse buttons (bytes 8-10 contain button flags)
-    // Button layout based on Steam Controller protocol
-    let btn1 = data[8];
-    let btn2 = data[9];
-    let btn3 = data[10];
+    // Parse buttons (bytes 2-3 contain button state flags)
+    // TODO: Need more test data to map individual buttons correctly
+    let btn_low = data[2];
+    let btn_high = data[3];
 
-    input.buttons.rt = (btn1 & 0x01) != 0;
-    input.buttons.lt = (btn1 & 0x02) != 0;
-    input.buttons.rb = (btn1 & 0x04) != 0;
-    input.buttons.lb = (btn1 & 0x08) != 0;
-    input.buttons.y = (btn1 & 0x10) != 0;
-    input.buttons.b = (btn1 & 0x20) != 0;
-    input.buttons.x = (btn1 & 0x40) != 0;
-    input.buttons.a = (btn1 & 0x80) != 0;
+    // Byte 8: Trigger press detection
+    let trigger_flags = data[8];
+    input.buttons.rt = (trigger_flags & 0x01) != 0;
+    input.buttons.lt = (trigger_flags & 0x02) != 0;
 
-    input.buttons.lpad_click = (btn2 & 0x02) != 0;
-    input.buttons.rpad_click = (btn2 & 0x04) != 0;
-    input.buttons.stick_click = (btn2 & 0x40) != 0;
+    // Byte 10: Trackpad touch/click detection
+    let trackpad_flags = data[10];
+    let lpad_touched = (trackpad_flags & 0x08) != 0;
+    let rpad_touched = (trackpad_flags & 0x10) != 0;
+    let rpad_clicked = (trackpad_flags & 0x14) == 0x14; // 0x10 | 0x04
 
-    input.buttons.lgrip = (btn3 & 0x01) != 0;
-    input.buttons.rgrip = (btn3 & 0x02) != 0;
-    input.buttons.start = (btn3 & 0x04) != 0;
-    input.buttons.steam = (btn3 & 0x08) != 0;
-    input.buttons.select = (btn3 & 0x10) != 0;
+    input.buttons.lpad_click = (trackpad_flags & 0x08) != 0 && lpad_touched;
+    input.buttons.rpad_click = rpad_clicked;
 
-    // Parse analog triggers (bytes 11-12)
-    input.triggers.left = data[11];
+    // Parse analog triggers (bytes 12-13)
+    // Note: Resting values are around 0xe0-0xff, not 0x00!
     input.triggers.right = data[12];
+    input.triggers.left = data[13];
 
-    // Parse stick position (bytes 16-19: X as i16, Y as i16)
-    input.stick.x = i16::from_le_bytes([data[16], data[17]]);
-    input.stick.y = i16::from_le_bytes([data[18], data[19]]);
+    // Parse stick OR left trackpad (bytes 16-19: X,Y as 16-bit LE)
+    // When trackpad L is touched (flag 0x08), these are trackpad coordinates
+    // Otherwise, these appear to be stick coordinates
+    let x1619 = i16::from_le_bytes([data[16], data[17]]);
+    let y1619 = i16::from_le_bytes([data[18], data[19]]);
 
-    // Parse left trackpad (bytes 20-25)
-    let lpad_x = i16::from_le_bytes([data[20], data[21]]);
-    let lpad_y = i16::from_le_bytes([data[22], data[23]]);
-    input.left_trackpad = TrackpadData {
-        x: lpad_x,
-        y: lpad_y,
-        active: lpad_x != 0 || lpad_y != 0, // Simple touch detection
-    };
+    if lpad_touched {
+        input.left_trackpad = TrackpadData {
+            x: x1619,
+            y: y1619,
+            active: true,
+        };
+        input.stick = StickData { x: 0, y: 0 }; // Stick not used when trackpad active
+    } else {
+        // When trackpad not touched, these bytes seem to contain stick data
+        input.stick.x = x1619;
+        input.stick.y = y1619;
+        input.left_trackpad = TrackpadData::default();
+    }
 
-    // Parse right trackpad (bytes 26-31)
-    let rpad_x = i16::from_le_bytes([data[26], data[27]]);
-    let rpad_y = i16::from_le_bytes([data[28], data[29]]);
+    // Parse right trackpad (bytes 20-23: X,Y as 16-bit LE)
+    let rpad_x = i16::from_le_bytes([data[20], data[21]]);
+    let rpad_y = i16::from_le_bytes([data[22], data[23]]);
     input.right_trackpad = TrackpadData {
         x: rpad_x,
         y: rpad_y,
-        active: rpad_x != 0 || rpad_y != 0,
+        active: rpad_touched,
     };
 
-    // Parse gyroscope data (bytes 32-37: pitch, yaw, roll as i16)
-    if data.len() >= 38 {
-        input.gyro.pitch = i16::from_le_bytes([data[32], data[33]]);
-        input.gyro.yaw = i16::from_le_bytes([data[34], data[35]]);
-        input.gyro.roll = i16::from_le_bytes([data[36], data[37]]);
+    // Parse gyroscope data (bytes 48-55: empirically observed to change with movement)
+    if data.len() >= 56 {
+        input.gyro.pitch = i16::from_le_bytes([data[48], data[49]]);
+        input.gyro.yaw = i16::from_le_bytes([data[50], data[51]]);
+        input.gyro.roll = i16::from_le_bytes([data[52], data[53]]);
     }
 
-    // Parse timestamp (bytes 4-7 as u32)
+    // Parse timestamp (bytes 4-7 as u32 LE)
     input.timestamp = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
 
     Ok(input)
