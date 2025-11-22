@@ -104,3 +104,22 @@ pub fn read_controller_input() -> Result<ControllerInput, String> {
         None => Err("Steam Controller manager not initialized".to_string()),
     }
 }
+
+#[tauri::command]
+pub fn read_raw_input_debug() -> Result<String, String> {
+    let manager = SC_MANAGER.lock().unwrap();
+
+    match manager.as_ref() {
+        Some(m) => {
+            match m.read_input() {
+                Ok(data) => {
+                    // Convert to hex string for debugging
+                    let hex: Vec<String> = data.iter().map(|b| format!("{:02x}", b)).collect();
+                    Ok(format!("Size: {} bytes\nHex: {}", data.len(), hex.join(" ")))
+                }
+                Err(e) => Err(e),
+            }
+        }
+        None => Err("Steam Controller manager not initialized".to_string()),
+    }
+}

@@ -139,6 +139,15 @@ function App() {
     }
   };
 
+  const testRawInput = async () => {
+    try {
+      const rawData = await invoke<string>('read_raw_input_debug');
+      alert('Raw Input Data:\n' + rawData);
+    } catch (e) {
+      alert('Error reading raw input:\n' + String(e));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-6xl mx-auto">
@@ -185,6 +194,17 @@ function App() {
               }`}
             >
               Disconnect
+            </button>
+            <button
+              onClick={testRawInput}
+              disabled={!isConnected}
+              className={`px-4 py-2 rounded transition ${
+                !isConnected
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : 'bg-yellow-600 hover:bg-yellow-700'
+              }`}
+            >
+              🐛 Debug Raw Input
             </button>
           </div>
 
