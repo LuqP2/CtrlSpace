@@ -1,4 +1,4 @@
-# CtrlSpace v0.0.0
+# CtrlSpace v0.1.0
 
 A desktop app for Steam Controller / Steam Deck input remapping with on-screen keyboard.
 
