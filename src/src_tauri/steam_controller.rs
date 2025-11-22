@@ -102,6 +102,11 @@ impl SteamControllerManager {
                     // Store the device
                     let mut device_lock = self.device.lock().unwrap();
                     *device_lock = Some(device);
+                    drop(device_lock); // Release lock
+
+                    // Disable "Lizard Mode" (mouse emulation) to get raw input
+                    println!("🦎 Disabling Lizard Mode...");
+                    self.disable_lizard_mode()?;
 
                     return Ok(info);
                 }
@@ -111,6 +116,49 @@ impl SteamControllerManager {
         Err("Steam Controller not found".to_string())
     }
 
+    /// Disable Lizard Mode (mouse/keyboard emulation)
+    /// This allows us to read raw HID input data
+    fn disable_lizard_mode(&self) -> Result<(), String> {
+        let device_lock = self.device.lock().unwrap();
+
+        if let Some(device) = device_lock.as_ref() {
+            // Command 1: Disable mouse emulation
+            // Feature report 0x81 - turns off the default mouse behavior
+            let disable_mouse = vec![0x81, 0x00];
+
+            device.send_feature_report(&disable_mouse)
+                .map_err(|e| format!("Failed to disable mouse mode: {}", e))?;
+
+            println!("  ✓ Mouse emulation disabled");
+
+            // Small delay
+            std::thread::sleep(std::time::Duration::from_millis(20));
+
+            // Command 2: Enable full input mode
+            // Feature report 0x87 - configures the controller for raw input
+            let enable_input = vec![
+                0x87, 0x15, 0x32, 0x84, 0x03, 0x18, 0x00, 0x00,
+                0x31, 0x02, 0x00, 0x08, 0x07, 0x00, 0x07, 0x07,
+                0x00, 0x30, 0x18, 0x00, 0x2f, 0x01, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ];
+
+            device.send_feature_report(&enable_input)
+                .map_err(|e| format!("Failed to enable input mode: {}", e))?;
+
+            println!("  ✓ Raw input mode enabled");
+            println!("✅ Lizard Mode disabled - controller ready for raw input!");
+
+            Ok(())
+        } else {
+            Err("Controller not connected".to_string())
+        }
+    }
+
     /// Check if currently connected
     pub fn is_connected(&self) -> bool {
         self.device.lock().unwrap().is_some()
@@ -118,8 +166,32 @@ impl SteamControllerManager {
 
     /// Disconnect from the device
     pub fn disconnect(&self) {
+        // Re-enable Lizard Mode before disconnecting
+        println!("🦎 Re-enabling Lizard Mode...");
+        let _ = self.enable_lizard_mode();
+
         let mut device_lock = self.device.lock().unwrap();
         *device_lock = None;
+        println!("✅ Controller disconnected");
+    }
+
+    /// Re-enable Lizard Mode (mouse/keyboard emulation)
+    /// This restores default controller behavior
+    fn enable_lizard_mode(&self) -> Result<(), String> {
+        let device_lock = self.device.lock().unwrap();
+
+        if let Some(device) = device_lock.as_ref() {
+            // Enable mouse emulation
+            let enable_mouse = vec![0x81, 0x01];
+
+            device.send_feature_report(&enable_mouse)
+                .map_err(|e| format!("Failed to enable mouse mode: {}", e))?;
+
+            println!("  ✓ Mouse emulation re-enabled");
+            Ok(())
+        } else {
+            Err("Controller not connected".to_string())
+        }
     }
 
     /// Get the HID device for reading/writing
