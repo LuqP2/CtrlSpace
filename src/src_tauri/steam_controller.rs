@@ -120,9 +120,11 @@ impl SteamControllerManager {
                     *device_lock = Some(device);
                     drop(device_lock); // Release lock
 
-                    // Disable "Lizard Mode" (mouse emulation) to get raw input
-                    println!("🦎 Disabling Lizard Mode...");
-                    self.disable_lizard_mode()?;
+                    // NOTE: NOT disabling Lizard Mode for now - trying to read data
+                    // while mouse emulation is still active. Many Steam Controller
+                    // projects do this successfully.
+                    println!("📡 Connected to vendor-specific interface - ready to read raw data");
+                    println!("   (Lizard Mode still active - mouse will continue working)");
 
                     return Ok(info);
                 }
@@ -222,14 +224,15 @@ impl SteamControllerManager {
         match device_lock.as_ref() {
             Some(device) => {
                 let mut buf = vec![0u8; 64];
-                match device.read_timeout(&mut buf, 10) {
-                    // 10ms timeout
+                // Increased timeout to 1000ms (1 second) to give controller time to send data
+                match device.read_timeout(&mut buf, 1000) {
                     Ok(size) => {
                         if size > 0 {
+                            println!("📥 Received {} bytes from controller", size);
                             buf.truncate(size);
                             Ok(buf)
                         } else {
-                            Err("No data available".to_string())
+                            Err("No data available (timeout after 1s)".to_string())
                         }
                     }
                     Err(e) => Err(format!("Read error: {}", e)),
