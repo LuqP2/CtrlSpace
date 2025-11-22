@@ -120,7 +120,7 @@ function App() {
       const info = await invoke<SteamControllerInfo>('connect_steam_controller');
       setControllerInfo(info);
       setIsConnected(true);
-      setIsPolling(true);
+      setIsPolling(false); // Disabled auto-polling to prevent crash with 1000ms timeout
       setError('');
     } catch (e) {
       setError(String(e));
