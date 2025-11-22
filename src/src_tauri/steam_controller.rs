@@ -71,14 +71,30 @@ impl SteamControllerManager {
     pub fn connect(&self) -> Result<SteamControllerInfo, String> {
         let api = self.api.lock().unwrap();
 
-        // Try to find and open the device
+        // Try to find and open the VENDOR-SPECIFIC interface (not mouse/keyboard)
+        // We need usage_page=0xFF00 (65280) which is the raw controller interface
         for device_info in api.device_list() {
             if device_info.vendor_id() == VALVE_VENDOR_ID {
                 let pid = device_info.product_id();
                 if pid == SC_WIRELESS_PID || pid == SC_WIRED_PID {
+                    // Only open vendor-specific interface (usage_page=65280)
+                    // This is NOT the mouse (usage_page=1, usage=2) or keyboard interface
+                    if device_info.usage_page() != 0xFF00 {
+                        println!("⏭️ Skipping interface {} (usage_page={}, usage={}) - not vendor-specific",
+                            device_info.interface_number(),
+                            device_info.usage_page(),
+                            device_info.usage());
+                        continue;
+                    }
+
+                    println!("✅ Opening vendor-specific interface {} (usage_page=0x{:04x}, usage={})",
+                        device_info.interface_number(),
+                        device_info.usage_page(),
+                        device_info.usage());
+
                     let device = api
-                        .open(VALVE_VENDOR_ID, pid)
-                        .map_err(|e| format!("Failed to open device: {}", e))?;
+                        .open_path(device_info.path())
+                        .map_err(|e| format!("Failed to open device path: {}", e))?;
 
                     let connection_type = if pid == SC_WIRELESS_PID {
                         "Wireless"
