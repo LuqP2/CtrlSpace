@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/tauri';
 import { useState, useEffect } from 'react';
 import './styles/index.css';
+import { ProfileEditor } from './components/ProfileEditor';
 
 interface SteamControllerInfo {
   connected: boolean;
@@ -66,6 +67,8 @@ function App() {
   const [error, setError] = useState<string>('');
   const [input, setInput] = useState<ControllerInput | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [isMapperRunning, setIsMapperRunning] = useState(false);
+
 
   // Check connection status periodically
   useEffect(() => {
@@ -138,6 +141,22 @@ function App() {
       setError(String(e));
     }
   };
+
+  const toggleMapper = async () => {
+    try {
+      if (isMapperRunning) {
+        await invoke('stop_mapper');
+        setIsMapperRunning(false);
+      } else {
+        await invoke('start_mapper');
+        setIsMapperRunning(true);
+      }
+      setError('');
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
 
   const testRawInput = async () => {
     try {
@@ -227,6 +246,19 @@ function App() {
             >
               🔍 List HID Interfaces
             </button>
+            <button
+              onClick={toggleMapper}
+              disabled={!isConnected}
+              className={`px-4 py-2 rounded transition font-bold ${
+                !isConnected
+                  ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                  : isMapperRunning 
+                    ? 'bg-red-600 hover:bg-red-700 border-2 border-red-400' 
+                    : 'bg-green-600 hover:bg-green-700 border-2 border-green-500'
+              }`}
+            >
+              {isMapperRunning ? '⏹ Stop Mapper' : '▶ Start Mapper'}
+            </button>
           </div>
 
           {controllerInfo && (
@@ -243,6 +275,8 @@ function App() {
             </div>
           )}
         </div>
+
+        {isConnected && <ProfileEditor />}
 
         {/* Input Debug View */}
         {isConnected && (

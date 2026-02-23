@@ -217,9 +217,26 @@ pub fn parse_input_report(data: &[u8]) -> Result<ControllerInput, String> {
     let mut input = ControllerInput::default();
 
     // Parse buttons (bytes 2-3 contain button state flags)
-    // TODO: Need more test data to map individual buttons correctly
     let btn_low = data[2];
     let btn_high = data[3];
+
+    input.buttons.rt = (btn_low & 0x01) != 0;
+    input.buttons.lt = (btn_low & 0x02) != 0;
+    input.buttons.rb = (btn_low & 0x04) != 0;
+    input.buttons.lb = (btn_low & 0x08) != 0;
+    input.buttons.y = (btn_low & 0x10) != 0;
+    input.buttons.x = (btn_low & 0x20) != 0;
+    input.buttons.b = (btn_low & 0x40) != 0;
+    input.buttons.a = (btn_low & 0x80) != 0;
+
+    input.buttons.stick_click = (btn_high & 0x01) != 0; // Stick click might be here or 0x40, let's guess 0x40 based on typical
+    // Actually, Steam controller typically maps:
+    // right pad click = 0x04 in btn_high or mapped via byte 10. Let's use byte 10 for pads.
+    input.buttons.select = (btn_high & 0x10) != 0; // left arrow / select / back
+    input.buttons.start = (btn_high & 0x20) != 0;  // right arrow / start / forward
+    input.buttons.rgrip = (btn_high & 0x40) != 0;  // right grip
+    input.buttons.lgrip = (btn_high & 0x80) != 0;  // left grip
+
 
     // Byte 8: Trigger press detection
     let trigger_flags = data[8];

@@ -17,7 +17,9 @@ fn main() {
             src_tauri::commands::disconnect_steam_controller,
             src_tauri::commands::is_steam_controller_connected,
             src_tauri::commands::read_controller_input,
-            src_tauri::commands::read_raw_input_debug
+            src_tauri::commands::read_raw_input_debug,
+            src_tauri::commands::start_mapper,
+            src_tauri::commands::stop_mapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -153,3 +153,18 @@ pub fn read_raw_input_debug() -> Result<String, String> {
         None => Err("Steam Controller manager not initialized".to_string()),
     }
 }
+
+// Mapper Commands
+
+#[tauri::command]
+pub fn start_mapper() -> String {
+    super::mapper::start_mapper(SC_MANAGER.clone());
+    super::mapper::set_mapper_running(true);
+    "Mapper started".to_string()
+}
+
+#[tauri::command]
+pub fn stop_mapper() -> String {
+    super::mapper::set_mapper_running(false);
+    "Mapper stopped".to_string()
+}

@@ -1,0 +1,26 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm build",
+    "beforeDevCommand": "pnpm dev",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "CtrlSpace",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "identifier": "com.ctrlspace.app",
+    "windows": [
+      {
+        "title": "CtrlSpace",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "bundle": {
+      "active": true,
+      "targets": "all"
+    }
+  }
+}
